@@ -1,0 +1,96 @@
+import { useState, useEffect } from 'react'
+
+export function useInstallPrompt() {
+  const [deferredPrompt, setDeferredPrompt] = useState(null)
+  const [isInstallable, setIsInstallable] = useState(false)
+  const [isInstalled, setIsInstalled] = useState(false)
+
+  useEffect(() => {
+    // 이미 설치되어 있는지 확인
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true)
+      return
+    }
+
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault()
+      setDeferredPrompt(e)
+      setIsInstallable(true)
+    }
+
+    const handleAppInstalled = () => {
+      setIsInstalled(true)
+      setIsInstallable(false)
+      setDeferredPrompt(null)
+      console.log('Amazing Grace Sunday School 앱이 설치되었습니다!')
+    }
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+    window.addEventListener('appinstalled', handleAppInstalled)
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+      window.removeEventListener('appinstalled', handleAppInstalled)
+    }
+  }, [])
+
+  const promptInstall = async () => {
+    if (!deferredPrompt) {
+      showInstallGuide()
+      return false
+    }
+
+    try {
+      const result = await deferredPrompt.prompt()
+      console.log(`설치 응답: ${result.outcome}`)
+      
+      if (result.outcome === 'accepted') {
+        setIsInstalled(true)
+        setIsInstallable(false)
+      }
+      
+      setDeferredPrompt(null)
+      return result.outcome === 'accepted'
+    } catch (error) {
+      console.error('설치 오류:', error)
+      return false
+    }
+  }
+
+  const showInstallGuide = () => {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    const isAndroid = /Android/.test(navigator.userAgent)
+    
+    let message = ''
+    if (isIOS) {
+      message = 'iOS: Safari 브라우저의 공유 버튼을 누른 후 "홈 화면에 추가"를 선택해주세요.'
+    } else if (isAndroid) {
+      message = 'Android: Chrome 메뉴에서 "홈 화면에 추가" 또는 "앱 설치"를 선택해주세요.'
+    } else {
+      message = '브라우저 주소창 오른쪽의 설치 아이콘을 클릭해주세요.'
+    }
+
+    alert(message)
+  }
+
+  const dismissPrompt = () => {
+    setIsInstallable(false)
+    localStorage.setItem('installPromptDismissed', Date.now().toString())
+  }
+
+  const checkDismissed = () => {
+    const dismissed = localStorage.getItem('installPromptDismissed')
+    if (dismissed) {
+      const hoursSince = (Date.now() - parseInt(dismissed)) / (1000 * 60 * 60)
+      return hoursSince < 24
+    }
+    return false
+  }
+
+  return {
+    isInstallable: isInstallable && !checkDismissed(),
+    isInstalled,
+    promptInstall,
+    dismissPrompt
+  }
+}
